@@ -134,7 +134,7 @@ public class McpAsyncServer {
 	McpAsyncServer(McpServerTransportProvider mcpTransportProvider, McpJsonMapper jsonMapper,
 			McpServerFeatures.Async features, Duration requestTimeout,
 			McpUriTemplateManagerFactory uriTemplateManagerFactory, JsonSchemaValidator jsonSchemaValidator,
-			boolean validateToolInputs) {
+			boolean validateToolInputs, Map<String, McpRequestHandler<?>> customRequestHandlers) {
 		this.mcpTransportProvider = mcpTransportProvider;
 		this.jsonMapper = jsonMapper;
 		this.serverInfo = features.serverInfo();
@@ -151,6 +151,10 @@ public class McpAsyncServer {
 		this.toolFilter = McpAsyncListFilter.and(features.toolFilters());
 
 		Map<String, McpRequestHandler<?>> requestHandlers = prepareRequestHandlers();
+		if (customRequestHandlers != null && !customRequestHandlers.isEmpty()) {
+			// User-supplied handlers override the defaults; last write wins.
+			requestHandlers.putAll(customRequestHandlers);
+		}
 		Map<String, McpNotificationHandler> notificationHandlers = prepareNotificationHandlers(features);
 
 		this.protocolVersions = mcpTransportProvider.protocolVersions();
@@ -166,7 +170,7 @@ public class McpAsyncServer {
 	McpAsyncServer(McpStreamableServerTransportProvider mcpTransportProvider, McpJsonMapper jsonMapper,
 			McpServerFeatures.Async features, Duration requestTimeout,
 			McpUriTemplateManagerFactory uriTemplateManagerFactory, JsonSchemaValidator jsonSchemaValidator,
-			boolean validateToolInputs) {
+			boolean validateToolInputs, Map<String, McpRequestHandler<?>> customRequestHandlers) {
 		this.mcpTransportProvider = mcpTransportProvider;
 		this.jsonMapper = jsonMapper;
 		this.serverInfo = features.serverInfo();
@@ -183,6 +187,10 @@ public class McpAsyncServer {
 		this.toolFilter = McpAsyncListFilter.and(features.toolFilters());
 
 		Map<String, McpRequestHandler<?>> requestHandlers = prepareRequestHandlers();
+		if (customRequestHandlers != null && !customRequestHandlers.isEmpty()) {
+			// User-supplied handlers override the defaults; last write wins.
+			requestHandlers.putAll(customRequestHandlers);
+		}
 		Map<String, McpNotificationHandler> notificationHandlers = prepareNotificationHandlers(features);
 
 		this.protocolVersions = mcpTransportProvider.protocolVersions();

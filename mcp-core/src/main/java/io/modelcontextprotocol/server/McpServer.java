@@ -247,7 +247,8 @@ public interface McpServer {
 			validateAsyncToolSchemas(jsonSchemaValidator, this.tools);
 
 			return new McpAsyncServer(transportProvider, jsonMapper == null ? McpJsonDefaults.getMapper() : jsonMapper,
-					features, requestTimeout, uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs);
+					features, requestTimeout, uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs,
+					customRequestHandlers);
 		}
 
 	}
@@ -276,7 +277,8 @@ public interface McpServer {
 			validateAsyncToolSchemas(jsonSchemaValidator, this.tools);
 
 			return new McpAsyncServer(transportProvider, jsonMapper == null ? McpJsonDefaults.getMapper() : jsonMapper,
-					features, requestTimeout, uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs);
+					features, requestTimeout, uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs,
+					customRequestHandlers);
 		}
 
 	}
@@ -345,6 +347,8 @@ public interface McpServer {
 		final List<BiFunction<McpAsyncServerExchange, List<McpSchema.Root>, Mono<Void>>> rootsChangeHandlers = new ArrayList<>();
 
 		Duration requestTimeout = Duration.ofHours(10); // Default timeout
+
+		final Map<String, McpRequestHandler<?>> customRequestHandlers = new HashMap<>();
 
 		public abstract McpAsyncServer build();
 
@@ -850,6 +854,46 @@ public interface McpServer {
 			return this;
 		}
 
+		/**
+		 * Registers a custom request handler for the given MCP method. This overrides any
+		 * default handler that may be registered for the same method (e.g.
+		 * {@code tools/list}, {@code resources/list}, etc.) and allows users to add
+		 * handlers for non-standard methods.
+		 * <p>
+		 * The capability negotiation is independent of this registration: if a custom
+		 * handler is registered for {@code tools/list} but the {@code tools} capability
+		 * is not declared, the server will still respond to {@code tools/list} requests
+		 * but will not advertise tools support to clients. The caller is responsible for
+		 * keeping capabilities and handlers in sync.
+		 * @param method the JSON-RPC method name (e.g.
+		 * {@link McpSchema#METHOD_TOOLS_LIST} or any custom method). Must not be null or
+		 * blank.
+		 * @param handler the handler to invoke. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if method is null/blank or handler is null
+		 */
+		public AsyncSpecification<S> requestHandler(String method, McpRequestHandler<?> handler) {
+			Assert.hasText(method, "Method must not be null or empty");
+			Assert.notNull(handler, "Handler must not be null");
+			this.customRequestHandlers.put(method, handler);
+			return this;
+		}
+
+		/**
+		 * Registers multiple custom request handlers in a single call. Equivalent to
+		 * invoking {@link #requestHandler(String, McpRequestHandler)} for each entry;
+		 * later entries override earlier ones for the same method (standard
+		 * {@link Map#putAll} semantics).
+		 * @param handlers a map of method name to handler. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if handlers is null
+		 */
+		public AsyncSpecification<S> requestHandlers(Map<String, McpRequestHandler<?>> handlers) {
+			Assert.notNull(handlers, "Handlers map must not be null");
+			this.customRequestHandlers.putAll(handlers);
+			return this;
+		}
+
 	}
 
 	class SingleSessionSyncSpecification extends SyncSpecification<SingleSessionSyncSpecification> {
@@ -881,7 +925,7 @@ public interface McpServer {
 
 			var asyncServer = new McpAsyncServer(transportProvider,
 					jsonMapper == null ? McpJsonDefaults.getMapper() : jsonMapper, asyncFeatures, requestTimeout,
-					uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs);
+					uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs, customRequestHandlers);
 			return new McpSyncServer(asyncServer, this.immediateExecution);
 		}
 
@@ -915,7 +959,7 @@ public interface McpServer {
 
 			var asyncServer = new McpAsyncServer(transportProvider,
 					jsonMapper == null ? McpJsonDefaults.getMapper() : jsonMapper, asyncFeatures, this.requestTimeout,
-					this.uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs);
+					this.uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs, customRequestHandlers);
 			return new McpSyncServer(asyncServer, this.immediateExecution);
 		}
 
@@ -987,6 +1031,8 @@ public interface McpServer {
 		Duration requestTimeout = Duration.ofSeconds(10); // Default timeout
 
 		boolean immediateExecution = false;
+
+		final Map<String, McpRequestHandler<?>> customRequestHandlers = new HashMap<>();
 
 		public abstract McpSyncServer build();
 
@@ -1500,6 +1546,46 @@ public interface McpServer {
 			return this;
 		}
 
+		/**
+		 * Registers a custom request handler for the given MCP method. This overrides any
+		 * default handler that may be registered for the same method (e.g.
+		 * {@code tools/list}, {@code resources/list}, etc.) and allows users to add
+		 * handlers for non-standard methods.
+		 * <p>
+		 * The capability negotiation is independent of this registration: if a custom
+		 * handler is registered for {@code tools/list} but the {@code tools} capability
+		 * is not declared, the server will still respond to {@code tools/list} requests
+		 * but will not advertise tools support to clients. The caller is responsible for
+		 * keeping capabilities and handlers in sync.
+		 * @param method the JSON-RPC method name (e.g.
+		 * {@link McpSchema#METHOD_TOOLS_LIST} or any custom method). Must not be null or
+		 * blank.
+		 * @param handler the handler to invoke. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if method is null/blank or handler is null
+		 */
+		public SyncSpecification<S> requestHandler(String method, McpRequestHandler<?> handler) {
+			Assert.hasText(method, "Method must not be null or empty");
+			Assert.notNull(handler, "Handler must not be null");
+			this.customRequestHandlers.put(method, handler);
+			return this;
+		}
+
+		/**
+		 * Registers multiple custom request handlers in a single call. Equivalent to
+		 * invoking {@link #requestHandler(String, McpRequestHandler)} for each entry;
+		 * later entries override earlier ones for the same method (standard
+		 * {@link Map#putAll} semantics).
+		 * @param handlers a map of method name to handler. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if handlers is null
+		 */
+		public SyncSpecification<S> requestHandlers(Map<String, McpRequestHandler<?>> handlers) {
+			Assert.notNull(handlers, "Handlers map must not be null");
+			this.customRequestHandlers.putAll(handlers);
+			return this;
+		}
+
 	}
 
 	class StatelessAsyncSpecification {
@@ -1563,6 +1649,8 @@ public interface McpServer {
 		final Map<McpSchema.CompleteReference, McpStatelessServerFeatures.AsyncCompletionSpecification> completions = new HashMap<>();
 
 		Duration requestTimeout = Duration.ofSeconds(10); // Default timeout
+
+		final Map<String, McpStatelessRequestHandler<?>> customRequestHandlers = new HashMap<>();
 
 		public StatelessAsyncSpecification(McpStatelessServerTransport transport) {
 			this.transport = transport;
@@ -2022,6 +2110,46 @@ public interface McpServer {
 			return this;
 		}
 
+		/**
+		 * Registers a custom request handler for the given MCP method. This overrides any
+		 * default handler that may be registered for the same method (e.g.
+		 * {@code tools/list}, {@code resources/list}, etc.) and allows users to add
+		 * handlers for non-standard methods.
+		 * <p>
+		 * The capability negotiation is independent of this registration: if a custom
+		 * handler is registered for {@code tools/list} but the {@code tools} capability
+		 * is not declared, the server will still respond to {@code tools/list} requests
+		 * but will not advertise tools support to clients. The caller is responsible for
+		 * keeping capabilities and handlers in sync.
+		 * @param method the JSON-RPC method name (e.g.
+		 * {@link McpSchema#METHOD_TOOLS_LIST} or any custom method). Must not be null or
+		 * blank.
+		 * @param handler the handler to invoke. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if method is null/blank or handler is null
+		 */
+		public StatelessAsyncSpecification requestHandler(String method, McpStatelessRequestHandler<?> handler) {
+			Assert.hasText(method, "Method must not be null or empty");
+			Assert.notNull(handler, "Handler must not be null");
+			this.customRequestHandlers.put(method, handler);
+			return this;
+		}
+
+		/**
+		 * Registers multiple custom request handlers in a single call. Equivalent to
+		 * invoking {@link #requestHandler(String, McpStatelessRequestHandler)} for each
+		 * entry; later entries override earlier ones for the same method (standard
+		 * {@link Map#putAll} semantics).
+		 * @param handlers a map of method name to handler. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if handlers is null
+		 */
+		public StatelessAsyncSpecification requestHandlers(Map<String, McpStatelessRequestHandler<?>> handlers) {
+			Assert.notNull(handlers, "Handlers map must not be null");
+			this.customRequestHandlers.putAll(handlers);
+			return this;
+		}
+
 		public McpStatelessAsyncServer build() {
 			var features = new McpStatelessServerFeatures.Async(this.serverInfo, this.serverCapabilities, this.tools,
 					this.resources, this.resourceTemplates, this.prompts, this.completions, this.instructions,
@@ -2032,7 +2160,8 @@ public interface McpServer {
 			validateStatelessAsyncToolSchemas(jsonSchemaValidator, this.tools);
 
 			return new McpStatelessAsyncServer(transport, jsonMapper == null ? McpJsonDefaults.getMapper() : jsonMapper,
-					features, requestTimeout, uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs);
+					features, requestTimeout, uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs,
+					customRequestHandlers);
 		}
 
 	}
@@ -2100,6 +2229,8 @@ public interface McpServer {
 		final Map<McpSchema.CompleteReference, McpStatelessServerFeatures.SyncCompletionSpecification> completions = new HashMap<>();
 
 		Duration requestTimeout = Duration.ofSeconds(10); // Default timeout
+
+		final Map<String, McpStatelessRequestHandler<?>> customRequestHandlers = new HashMap<>();
 
 		public StatelessSyncSpecification(McpStatelessServerTransport transport) {
 			this.transport = transport;
@@ -2562,6 +2693,46 @@ public interface McpServer {
 		}
 
 		/**
+		 * Registers a custom request handler for the given MCP method. This overrides any
+		 * default handler that may be registered for the same method (e.g.
+		 * {@code tools/list}, {@code resources/list}, etc.) and allows users to add
+		 * handlers for non-standard methods.
+		 * <p>
+		 * The capability negotiation is independent of this registration: if a custom
+		 * handler is registered for {@code tools/list} but the {@code tools} capability
+		 * is not declared, the server will still respond to {@code tools/list} requests
+		 * but will not advertise tools support to clients. The caller is responsible for
+		 * keeping capabilities and handlers in sync.
+		 * @param method the JSON-RPC method name (e.g.
+		 * {@link McpSchema#METHOD_TOOLS_LIST} or any custom method). Must not be null or
+		 * blank.
+		 * @param handler the handler to invoke. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if method is null/blank or handler is null
+		 */
+		public StatelessSyncSpecification requestHandler(String method, McpStatelessRequestHandler<?> handler) {
+			Assert.hasText(method, "Method must not be null or empty");
+			Assert.notNull(handler, "Handler must not be null");
+			this.customRequestHandlers.put(method, handler);
+			return this;
+		}
+
+		/**
+		 * Registers multiple custom request handlers in a single call. Equivalent to
+		 * invoking {@link #requestHandler(String, McpStatelessRequestHandler)} for each
+		 * entry; later entries override earlier ones for the same method (standard
+		 * {@link Map#putAll} semantics).
+		 * @param handlers a map of method name to handler. Must not be null.
+		 * @return This builder instance for method chaining
+		 * @throws IllegalArgumentException if handlers is null
+		 */
+		public StatelessSyncSpecification requestHandlers(Map<String, McpStatelessRequestHandler<?>> handlers) {
+			Assert.notNull(handlers, "Handlers map must not be null");
+			this.customRequestHandlers.putAll(handlers);
+			return this;
+		}
+
+		/**
 		 * Enable on "immediate execution" of the operations on the underlying
 		 * {@link McpStatelessAsyncServer}. Defaults to false, which does blocking code
 		 * offloading to prevent accidental blocking of the non-blocking transport.
@@ -2589,7 +2760,7 @@ public interface McpServer {
 
 			var asyncServer = new McpStatelessAsyncServer(transport,
 					jsonMapper == null ? McpJsonDefaults.getMapper() : jsonMapper, asyncFeatures, requestTimeout,
-					uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs);
+					uriTemplateManagerFactory, jsonSchemaValidator, validateToolInputs, customRequestHandlers);
 			return new McpStatelessSyncServer(asyncServer, this.immediateExecution);
 		}
 
