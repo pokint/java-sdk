@@ -83,7 +83,7 @@ public class McpStatelessAsyncServer {
 	McpStatelessAsyncServer(McpStatelessServerTransport mcpTransport, McpJsonMapper jsonMapper,
 			McpStatelessServerFeatures.Async features, Duration requestTimeout,
 			McpUriTemplateManagerFactory uriTemplateManagerFactory, JsonSchemaValidator jsonSchemaValidator,
-			boolean validateToolInputs) {
+			boolean validateToolInputs, Map<String, McpStatelessRequestHandler<?>> customRequestHandlers) {
 		this.mcpTransportProvider = mcpTransport;
 		this.jsonMapper = jsonMapper;
 		this.serverInfo = features.serverInfo();
@@ -129,6 +129,11 @@ public class McpStatelessAsyncServer {
 		// Add completion API handlers if the completion capability is enabled
 		if (this.serverCapabilities.completions() != null) {
 			requestHandlers.put(McpSchema.METHOD_COMPLETION_COMPLETE, completionCompleteRequestHandler());
+		}
+
+		if (customRequestHandlers != null && !customRequestHandlers.isEmpty()) {
+			// User-supplied handlers override the defaults; last write wins.
+			requestHandlers.putAll(customRequestHandlers);
 		}
 
 		this.protocolVersions = new ArrayList<>(mcpTransport.protocolVersions());
