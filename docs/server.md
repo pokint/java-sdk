@@ -826,6 +826,38 @@ mcpClient.setLoggingLevel(McpSchema.LoggingLevel.INFO);
 Clients can control the minimum logging level they receive through the `mcpClient.setLoggingLevel(level)` request. Messages below the set level will be filtered out.
 Supported logging levels (in order of increasing severity): DEBUG (0), INFO (1), NOTICE (2), WARNING (3), ERROR (4), CRITICAL (5), ALERT (6), EMERGENCY (7)
 
+### Custom request handlers
+
+The standard MCP method handlers (`tools/list`, `tools/call`, `resources/list`, `prompts/get`, etc.) are registered automatically based on the declared `ServerCapabilities`. For advanced use cases — such as filtering tools by caller, augmenting `tools/list` with server-side metadata, or implementing custom non-standard methods — you can register your own handler for any method on the builder. Custom handlers override the defaults (last write wins) and can also be added for methods that have no built-in handler.
+
+```java
+McpServer.async(transport)
+    .serverInfo("my-server", "1.0.0")
+    .capabilities(ServerCapabilities.builder().tools(true).build())
+    // Override the default tools/list handler to expose only a subset
+    .requestHandler(McpSchema.METHOD_TOOLS_LIST, (exchange, params) ->
+        Mono.just(McpSchema.ListToolsResult.builder(visibleTools).build()))
+    // Register a handler for a non-standard method
+    .requestHandler("myapp/echo", (exchange, params) ->
+        Mono.just(Map.of("echo", params)))
+    .build();
+```
+
+To register multiple handlers at once, use the `requestHandlers(Map)` overload:
+
+```java
+Map<String, McpRequestHandler<?>> handlers = Map.of(
+    McpSchema.METHOD_TOOLS_LIST, (exchange, params) -> Mono.just(McpSchema.ListToolsResult.builder(myTools).build()),
+    "myapp/echo",                (exchange, params) -> Mono.just(Map.of("echo", params)));
+
+McpServer.sync(transport)
+    .serverInfo("my-server", "1.0.0")
+    .requestHandlers(handlers)
+    .build();
+```
+
+The same builder methods are available on the stateless specifications (`McpServer.async(statelessTransport)` and `McpServer.sync(statelessTransport)`), where they take `McpStatelessRequestHandler<?>` instances. Note that registering a custom handler for `tools/list` does **not** require declaring the `tools` capability, but without it the server will not advertise tools support to clients — that remains the caller's responsibility.
+
 ## Error Handling
 
 The SDK provides comprehensive error handling through the McpError class, covering protocol compatibility, transport communication, JSON-RPC messaging, tool execution, resource management, prompt handling, timeouts, and connection issues. This unified error handling approach ensures consistent and reliable error management across both synchronous and asynchronous operations.

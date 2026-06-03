@@ -6,7 +6,7 @@
 
 	<groupId>io.modelcontextprotocol.sdk</groupId>
 	<artifactId>mcp-parent</artifactId>
-	<version>2.0.1-SNAPSHOT</version>
+	<version>2.0-5p-0</version>
 
 	<packaging>pom</packaging>
 	<url>https://github.com/modelcontextprotocol/java-sdk</url>
@@ -387,4 +387,16 @@
 		</repository>
 	</repositories>
 
+	<distributionManagement>
+		<repository>
+			<id>5point</id>
+			<name>Internal Releases</name>
+			<url>http://svn:8081/nexus/content/repositories/releases/</url>
+		</repository>
+		<snapshotRepository>
+			<id>5point</id>
+			<name>Internal Snapshots</name>
+			<url>http://svn:8081/nexus/content/repositories/snapshots/</url>
+		</snapshotRepository>
+	</distributionManagement>
 </project>
