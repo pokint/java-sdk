@@ -51,7 +51,11 @@ Beim Deployment werden die Test-Module nicht benötigt und müssen daher explizi
 Beispiel für einen Deploy-Aufruf ohne die Test-Module:
 
 ```bash
-mvn deploy -pl '!mcp-test,!conformance-tests' -DskipTests
+./mvnw \
+  -pl mcp-bom,mcp-core,mcp,mcp-json-jackson2,mcp-json-jackson3,mcp-test \
+  -am \
+  -DskipTests \
+  clean deploy
 ```
 
 Das Deployment erfolgt in das interne Nexus-Repository (`http://svn:8081/nexus/content/repositories/releases/` für Releases bzw. `.../snapshots/` für Snapshot-Versionen), wie in der `distributionManagement`-Sektion der `pom.xml` konfiguriert.
