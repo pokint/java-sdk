@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,6 +95,20 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 	private final String mcpEndpoint;
 
 	/**
+	 * Compiled pattern for wildcard endpoint matching. {@code null} when the endpoint has
+	 * no wildcards and the legacy {@code endsWith} behavior is used.
+	 */
+	private final Pattern mcpEndpointPattern;
+
+	/**
+	 * Indicates whether the configured endpoint contains wildcard characters ({@code *}
+	 * or {@code **}). When {@code true}, requests are matched using
+	 * {@link #mcpEndpointPattern} against the full request URI; otherwise the legacy
+	 * {@code String#endsWith(String)} check is used for backward compatibility.
+	 */
+	private final boolean mcpEndpointHasWildcard;
+
+	/**
 	 * Flag indicating whether DELETE requests are disallowed on the endpoint.
 	 */
 	private final boolean disallowDelete;
@@ -131,6 +146,9 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 	 * messages.
 	 * @param mcpEndpoint The endpoint URI where clients should send their JSON-RPC
 	 * messages via HTTP. This endpoint will handle GET, POST, and DELETE requests.
+	 * Supports Ant-style wildcards: {@code *} matches a single path segment and
+	 * {@code **} matches zero or more path segments. When no wildcard is present the
+	 * legacy suffix match is used for backward compatibility.
 	 * @param disallowDelete Whether to disallow DELETE requests on the endpoint.
 	 * @param contextExtractor The extractor for transport context from the request.
 	 * @param keepAliveInterval The interval for keep-alive pings. If null, no keep-alive
@@ -151,6 +169,8 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 		this.disallowDelete = disallowDelete;
 		this.contextExtractor = contextExtractor;
 		this.securityValidator = securityValidator;
+		this.mcpEndpointHasWildcard = mcpEndpoint.indexOf('*') >= 0;
+		this.mcpEndpointPattern = this.mcpEndpointHasWildcard ? compileEndpointPattern(mcpEndpoint) : null;
 
 		if (keepAliveInterval != null) {
 
@@ -238,6 +258,64 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 				this.keepAliveScheduler.shutdown();
 			}
 		});
+
+	}
+
+	/**
+	 * Compiles the configured {@code mcpEndpoint} into a {@link Pattern} supporting
+	 * Ant-style wildcards.
+	 * <p>
+	 * Supported wildcards:
+	 * <ul>
+	 * <li>{@code **} — matches zero or more path segments (including the {@code /}
+	 * separators)</li>
+	 * <li>{@code *} — matches zero or more characters within a single path segment</li>
+	 * </ul>
+	 * The pattern is anchored to match the full request URI.
+	 * @param endpoint the endpoint pattern, e.g. {@code "/mcp/<single-segment>/message"}
+	 * or {@code "/mcp/<multi-segment>"}
+	 * @return the compiled pattern
+	 */
+
+	private static Pattern compileEndpointPattern(String endpoint) {
+		StringBuilder regex = new StringBuilder();
+		regex.append('^');
+		int i = 0;
+		while (i < endpoint.length()) {
+			char c = endpoint.charAt(i);
+			if (c == '*' && i + 1 < endpoint.length() && endpoint.charAt(i + 1) == '*') {
+				regex.append(".*");
+				i += 2;
+			}
+			else if (c == '*') {
+				regex.append("[^/]*");
+				i++;
+			}
+			else {
+				regex.append(Pattern.quote(String.valueOf(c)));
+				i++;
+			}
+		}
+		regex.append('$');
+		return Pattern.compile(regex.toString());
+	}
+
+	/**
+	 * Determines whether the given request URI matches the configured
+	 * {@code mcpEndpoint}.
+	 * <p>
+	 * When the endpoint contains wildcards, the request URI is matched against the
+	 * compiled pattern. Otherwise, the legacy {@code endsWith} check is used to preserve
+	 * backward compatibility with deployments that mount the servlet under a context path
+	 * and configure a fixed endpoint suffix.
+	 * @param requestURI the request URI to test
+	 * @return {@code true} if the URI matches the endpoint
+	 */
+	private boolean matchesEndpoint(String requestURI) {
+		if (this.mcpEndpointHasWildcard) {
+			return this.mcpEndpointPattern.matcher(requestURI).matches();
+		}
+		return requestURI.endsWith(this.mcpEndpoint);
 	}
 
 	/**
@@ -252,7 +330,7 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 			throws ServletException, IOException {
 
 		String requestURI = request.getRequestURI();
-		if (!requestURI.endsWith(mcpEndpoint)) {
+		if (!matchesEndpoint(requestURI)) {
 			response.sendError(HttpServletResponse.SC_NOT_FOUND);
 			return;
 		}
@@ -388,7 +466,7 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 			throws ServletException, IOException {
 
 		String requestURI = request.getRequestURI();
-		if (!requestURI.endsWith(mcpEndpoint)) {
+		if (!matchesEndpoint(requestURI)) {
 			response.sendError(HttpServletResponse.SC_NOT_FOUND);
 			return;
 		}
@@ -569,7 +647,7 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 			throws ServletException, IOException {
 
 		String requestURI = request.getRequestURI();
-		if (!requestURI.endsWith(mcpEndpoint)) {
+		if (!matchesEndpoint(requestURI)) {
 			response.sendError(HttpServletResponse.SC_NOT_FOUND);
 			return;
 		}
@@ -845,6 +923,10 @@ public class HttpServletStreamableServerTransportProvider extends HttpServlet
 
 		/**
 		 * Sets the endpoint URI where clients should send their JSON-RPC messages.
+		 * <p>
+		 * Ant-style wildcards are supported: {@code *} matches a single path segment (no
+		 * slashes) and {@code **} matches zero or more path segments. Examples:
+		 * {@code "/mcp"}, {@code "/mcp/<single-segment>/message"}, {@code "/api/**"}.
 		 * @param mcpEndpoint The MCP endpoint URI. Must not be null.
 		 * @return this builder instance
 		 * @throws IllegalArgumentException if mcpEndpoint is null
