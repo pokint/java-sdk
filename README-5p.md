@@ -10,7 +10,7 @@ Interne Hinweise zur Entwicklung und zum Deployment des MCP Java SDK.
 
 Bei der lokalen Entwicklung muss die Version in der `pom.xml` mit dem Suffix `-SNAPSHOT` versehen werden, damit Artefakte als Snapshot-Versionen in das lokale Maven-Repository installiert werden können. Das aktuelle Versionsschema folgt dem Muster `<Hauptversion>-5p-<Laufnummer>`, z. B. `2.0-5p-0`.
 
-> Hinweis: Die Versionsänderung kann bequem per „Suchen und Ersetzen" über alle `pom.xml`-Dateien des Projekts hinweg durchgeführt werden (z. B. `2.0-5p-0-SNAPSHOT` → `2.0-5p-0`).
+> Hinweis: Die Versionsänderung erfolgt über das Skript `scripts/bump-version.sh` (z. B. `./scripts/bump-version.sh 2.0-5p-0-SNAPSHOT`). Mit `--dry` wird ein Dry Run mit Anzeige der betroffenen Dateien ausgeführt, ohne zu schreiben.
 
 Beispiel für eine lokale Entwicklungsversion:
 
@@ -44,7 +44,7 @@ Dabei ist darauf zu achten, dass die eingebundene Version exakt der lokal instal
 
 ## Deployment einer neuen Version
 
-Vor dem Deployment muss die Version in der `pom.xml` auf die finale Release-Version ohne `-SNAPSHOT` angepasst werden (z. B. `2.0-5p-0`). Auch hier bietet sich „Suchen und Ersetzen" über alle `pom.xml`-Dateien an, um die SNAPSHOT-Suffixe konsistent zu entfernen.
+Vor dem Deployment muss die Version in der `pom.xml` auf die finale Release-Version ohne `-SNAPSHOT` angepasst werden (z. B. `2.0-5p-0`). Dies geschieht ebenfalls über `scripts/bump-version.sh` (z. B. `./scripts/bump-version.sh 2.0-5p-0`). Nach dem Release wird für den nächsten Entwicklungszyklus wieder auf eine neue `-SNAPSHOT`-Version hochgezählt.
 
 Beim Deployment werden die Test-Module nicht benötigt und müssen daher explizit ausgeschlossen werden. Dazu wird das Property `-pl` in Kombination mit `-am` und einer Liste der zu deployenden Module verwendet, bzw. die nicht zu deployenden Module werden über `-pl` mit vorangestelltem `!` ausgeschlossen. Die Test-Module sind `mcp-test` und `conformance-tests`.
 
